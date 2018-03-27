@@ -9,6 +9,8 @@ class DataProcessor():
     def __init__(self):
         # Used for hashing gold labels into numeric format for training, omitting "-"
         self.GOLD_LABELS = {'entailment': 1, 'neutral': 0, 'contradiction': -1}
+        self.GLOVE_MODEL_PATH = "models/glove.twitter.27B.200d.txt"
+        self.EMBEDDING_DIM = 200
 
     def get_embeddings(self, input_file_path):
         """ Preprocess the data in a file into a dictionary of sentences embeddings and
@@ -61,12 +63,26 @@ class DataProcessor():
                         long_data_list.append(new_item)
             return np.concatenate((short_data_list, medium_data_list, long_data_list), axis=0)
 
+    def loadGloveModel(self, glove_file_path):
+        print("Loading Glove Model")
+        model = {}
+        with open(glove_file_path, 'r') as f:
+            for line in f:
+                splitLine = line.split()
+                word = splitLine[0]
+                embedding = np.array([float(val) for val in splitLine[1:]])
+                model[word] = embedding
+            print("Done.",len(model)," words loaded!")
+            return model
+
     def gloVe_embeddings(self, sentence):
-        """ Use 300 dimensional GloVe embeddings (Pennington et al., 2014) to represent words
-        Normalize each vector to l2 norm of 1 and projected down to 200 dimensions
+        """ Use 200 dimensional GloVe embeddings (Pennington et al., 2014) to represent words
+        Normalize each vector to l2 norm of 1
         Out of Vocab words are hashed to random embedding
         """
-        pass
+        glove_model = self.loadGloveModel(self.GLOVE_MODEL_PATH)
+        random_embedding = np.random.normal(0, 0.01, self.EMBEDDING_DIM)
+        return np.array([glove_model[word] if word in glove_model else random_embedding for word in sentence.split()])
 
     def pad_sentence(self, sentence, sentence_max_len):
         """ Padding the input sentence to sentence_max_len with " ", which is masked out during training,
