@@ -26,15 +26,29 @@ class DataProcessorTest(unittest.TestCase):
     #     print(len(self.dp.preprocess_jsonl(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", sentence_max_len=100)))
     #     print(self.dp.preprocess_jsonl(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", sentence_max_len=100)[-1])
 
-    # def test_loade_glove(self):
+    # def test_load_glove(self):
     #     path = "models/glove.twitter.27B.200d.txt"
     #     self.dp.loadGloveModel(path)
 
-    def test_gloVe_embeddings(self):
-        sentence = "My mom has a cat meoww".lower()
-        embeddings = self.dp.gloVe_embeddings(sentence)
-        print(embeddings)
-        print(len(embeddings))
+    # def test_gloVe_embeddings(self):
+    #     sentence = "My mom has a cat meoww".lower()
+    #     embeddings = self.dp.gloVe_embeddings(sentence, 8)
+    #     print(embeddings)
+    #     print(len(embeddings))
+    #     print(embeddings.shape)
+
+    def test_get_batched_data(self):
+        batch_num = 0
+        for batch_data in self.dp.get_batched_data(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", batch_size=1000):
+            batch_num += 1
+            print("batch_num is ", batch_num) 
+            print(batch_data["sentence1"].shape)
+            print(batch_data["sentence2"].shape)
+            print(batch_data["la"])
+            print(batch_data["lb"])
+            print(batch_data["gold_label"].shape)
+
+        print("batch num is ", batch_num)
 
 if __name__ == '__main__':
     unittest.main()
