@@ -25,24 +25,33 @@ class DataProcessor():
             embedded_data: a dictionary of dictionaries containing embeddings of 2 sentences and 
             their corresponding gold label in a numeric form
         """
-        postprocessed_data = self.preprocess_jsonl(input_file_path, sentence_max_len=100)
+        postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=30)
 
         batch_array = np.array_split(postprocessed_data, len(postprocessed_data) / batch_size)
         for batch_dict in batch_array:
+
             batch_max_word_count1 = max([len(entry["sentence1"].split()) for entry in batch_dict])
             batch_max_word_count2 = max([len(entry["sentence2"].split()) for entry in batch_dict])
+            batch_max_word_count = max(batch_max_word_count1, batch_max_word_count2)
+            if batch_max_word_count < 15:
+                batch_max_word_count = 15
+            else:
+                batch_max_word_count = 30
+
             embedded_data = {
                                 "sentence1": np.array([self.gloVe_embeddings(entry["sentence1"],
                                     batch_max_word_count1) for entry in batch_dict]),
                                 "sentence2": np.array([self.gloVe_embeddings(entry["sentence2"],
                                     batch_max_word_count2) for entry in batch_dict]),
-                                "la": batch_max_word_count1,
-                                "lb": batch_max_word_count2,
+                                "batch_max_word_count": batch_max_word_count,
                                 "gold_label": np.array([entry["gold_label"] for entry in batch_dict])
                             }
-            yield embedded_data
 
-    def preprocess_jsonl(self, input_file_path, sentence_max_len):
+            # Test on shorter sentences
+            if embedded_data["batch_max_word_count"] == 15:
+                yield embedded_data
+
+    def preprocess_jsonl(self, input_file_path, max_token_num):
         """ handles reading data from input jsonl file and writing preprocessed data into a separate file
         Preprocessed data is in the json format: np array of {"sentence1":..., "sentence2":...,
         "gold_label": 1} semi sorted
@@ -51,35 +60,36 @@ class DataProcessor():
            gold label from the dataset
         2. Prepending each sentence with the NULL token
         3. Adding padding to the sentences to the maximum length
-        4. Semi-sorting the data by length < 20, length < 50 and others (to ensure each batch has
+        4. Semi-sorting the data by token length < 15 and others (to ensure each batch has
            similar length)
         Args:
             input_file_path: path to file where the input jsonl is
-            sentence_max_len: the length of the sentences we are adding padding to
+            max_token_num: the number of tokens of the sentences we are adding padding to
         Returns:
             np array of new dictionayrs  {"sentence1":..., "sentence2":..., "gold_label": 1} semi sorted
         """
         short_data_list = []
-        medium_data_list = []
         long_data_list = []
 
         with open(input_file_path, 'rb') as input_file: # opening file in binary(rb) mode    
             for item in json_lines.reader(input_file):
                 if item["gold_label"] != "-": # Removing unlabeled data
                     new_item = {}
-                    data_len = max(len(item["sentence1"]), len(item["sentence2"]))
                     # Prepending sentences with the NULL token
-                    new_item["sentence1"] = self.pad_sentence('\0' + item["sentence1"], sentence_max_len) 
-                    new_item["sentence2"] = self.pad_sentence('\0' + item["sentence2"], sentence_max_len)
+                    token_array1 = ('\0 ' + item["sentence1"]).split()
+                    token_array2 = ('\0 ' + item["sentence2"]).split()
+                    # Number of token count post processed
+                    data_len = max(len(token_array1), len(token_array2))
+
+                    new_item["sentence1"] = self.pad_sentence(token_array1, max_token_num) 
+                    new_item["sentence2"] = self.pad_sentence(token_array2, max_token_num)                    
                     new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to numeric
 
-                    if data_len < 20:
+                    if data_len < 15:
                         short_data_list.append(new_item)
-                    elif data_len < 50:
-                        medium_data_list.append(new_item)
                     else:
                         long_data_list.append(new_item)
-            return np.concatenate((short_data_list, medium_data_list, long_data_list), axis=0)
+            return np.concatenate((short_data_list, long_data_list), axis=0)
 
     def loadGloveModel(self, glove_file_path):
         print("Loading Glove Model")
@@ -121,19 +131,19 @@ class DataProcessor():
 
         return word_embeddings
 
-    def pad_sentence(self, sentence, sentence_max_len):
-        """ Padding the input sentence to sentence_max_len with " ", which is masked out during training,
-        take the first sentence_max_len characters if the number of chars in the sentences already exceeds sentence_max_len
+    def pad_sentence(self, token_array, max_token_num):
+        """ Padding the input sentence to max_token_num with "-", which is masked out during training,
+        take the first max_token_num characters if the number of tokens in the sentences already exceeds max_token_num
         Args:
-            sentence: string of sentence to be processed
-            sentence_max_len: int indicating the largest number of chars a sentence can contain
+            token_array: array of tokens with NULL starter to be processed
+            max_token_num: int indicating the largest number of tokens the resulting sentence can contain
         Returns:
-            The padded sentence of sentence_max_len characters
+            The padded sentence of max_token_num tokens
         """
-        if len(sentence) >= sentence_max_len:
-            return sentence[0: sentence_max_len]
+        if len(token_array) >= max_token_num:
+            return ' '.join(token_array[0: max_token_num])
 
-        return sentence.ljust(sentence_max_len)
+        return ' '.join(token_array)
 
 
 

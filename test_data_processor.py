@@ -23,8 +23,8 @@ class DataProcessorTest(unittest.TestCase):
     #     self.assertEqual(self.dp.pad_sentence(sentence, max_len), "hello")
 
     # def test_preprocess_jsonl(self):
-    #     print(len(self.dp.preprocess_jsonl(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", sentence_max_len=100)))
-    #     print(self.dp.preprocess_jsonl(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", sentence_max_len=100)[-1])
+    #     print(len(self.dp.preprocess_jsonl(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", max_token_num=100)))
+    #     print(self.dp.preprocess_jsonl(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", max_token_num=100)[-1])
 
     # def test_load_glove(self):
     #     path = "models/glove.twitter.27B.200d.txt"
@@ -44,8 +44,7 @@ class DataProcessorTest(unittest.TestCase):
             print("batch_num is ", batch_num) 
             print(batch_data["sentence1"].shape)
             print(batch_data["sentence2"].shape)
-            print(batch_data["la"])
-            print(batch_data["lb"])
+            print(batch_data["batch_max_word_count"])
             print(batch_data["gold_label"].shape)
 
         print("batch num is ", batch_num)
