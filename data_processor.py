@@ -7,8 +7,8 @@ class DataProcessor():
         embed data into vectors
     """
     def __init__(self):
-        # Used for hashing gold labels into numeric format for training, omitting "-"
-        self.GOLD_LABELS = {'entailment': 1, 'neutral': 0, 'contradiction': -1}
+        # Used for hashing gold labels into vector format for training, omitting "-"
+        self.GOLD_LABELS = {'entailment': [1, 0, 0], 'neutral': [0, 1, 0], 'contradiction': [0, 0, 1]}
         self.GLOVE_MODEL_PATH = "models/glove.twitter.27B.200d.txt"
         self.EMBEDDING_DIM = 200
         self.glove_model = self.loadGloveModel(self.GLOVE_MODEL_PATH)
@@ -23,12 +23,11 @@ class DataProcessor():
             input_file_path: path to file where the input jsonl is
         Returns:
             embedded_data: a dictionary of dictionaries containing embeddings of 2 sentences and 
-            their corresponding gold label in a numeric form
+            their corresponding gold label in a vector form
         """
         postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=30)
 
-        batch_array = np.array_split(postprocessed_data, len(postprocessed_data) / batch_size)
-        for batch_dict in batch_array:
+        for batch_dict in self.chunks(postprocessed_data, batch_size):
 
             batch_max_word_count1 = max([len(entry["sentence1"].split()) for entry in batch_dict])
             batch_max_word_count2 = max([len(entry["sentence2"].split()) for entry in batch_dict])
@@ -40,14 +39,14 @@ class DataProcessor():
 
             embedded_data = {
                                 "sentence1": np.array([self.gloVe_embeddings(entry["sentence1"],
-                                    batch_max_word_count1) for entry in batch_dict]),
+                                    batch_max_word_count) for entry in batch_dict]),
                                 "sentence2": np.array([self.gloVe_embeddings(entry["sentence2"],
-                                    batch_max_word_count2) for entry in batch_dict]),
+                                    batch_max_word_count) for entry in batch_dict]),
                                 "batch_max_word_count": batch_max_word_count,
                                 "gold_label": np.array([entry["gold_label"] for entry in batch_dict])
                             }
 
-            # Test on shorter sentences
+            # Testing on shorter sentences
             if embedded_data["batch_max_word_count"] == 15:
                 yield embedded_data
 
@@ -83,7 +82,7 @@ class DataProcessor():
 
                     new_item["sentence1"] = self.pad_sentence(token_array1, max_token_num) 
                     new_item["sentence2"] = self.pad_sentence(token_array2, max_token_num)                    
-                    new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to numeric
+                    new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to vector representation
 
                     if data_len < 15:
                         short_data_list.append(new_item)
@@ -92,6 +91,7 @@ class DataProcessor():
             return np.concatenate((short_data_list, long_data_list), axis=0)
 
     def loadGloveModel(self, glove_file_path):
+        return {}
         print("Loading Glove Model")
         model = {}
         with open(glove_file_path, 'r') as f:
@@ -144,6 +144,11 @@ class DataProcessor():
             return ' '.join(token_array[0: max_token_num])
 
         return ' '.join(token_array)
+
+    def chunks(self, l, n):
+        """Yield successive n-sized chunks from l."""
+        for i in range(0, len(l), n):
+            yield l[i:i + n]
 
 
 

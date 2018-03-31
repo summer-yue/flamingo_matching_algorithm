@@ -9,7 +9,7 @@ class DecomposableAttentionNLITest(unittest.TestCase):
     def setUp(self):
         self.sess = tf.Session()
         with self.sess.as_default():
-            self.nli = DaNli(learning_rate=0.05, batch_size=1000)
+            self.nli = DaNli(learning_rate=0.05, batch_size=32)
 
     # def test_build_graph(self):
     #     self.nli.build_graph(1000)
