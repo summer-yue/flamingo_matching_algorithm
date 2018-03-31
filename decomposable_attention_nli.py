@@ -3,13 +3,12 @@ import tensorflow as tf
 
 from data_processor import DataProcessor
 
-TEST_FILE_PATH = "data/snli_1.0/snli_1.0_test.jsonl"
-
 class DecomposableAttentionNLI():
     """ Decomposable Attention Natural Language Inference Implementation in Tensorflow from Parikh et al.,
     """
     def __init__(self, learning_rate, batch_size):
         self.dp = DataProcessor()
+        self.keep_prob = 0.8
         self.PROJECTED_DIMENSION_F = 150
         self.PROJECTED_DIMENSION_G = 100
         self.PROJECTED_DIMENSION_H = 3 # Number of gold labels
@@ -24,14 +23,16 @@ class DecomposableAttentionNLI():
     def build_graph(self, batch_size):
         self.a = tf.placeholder(tf.float32, [None, None, self.EMBEDDING_DIM], name="sentence1") # token_count x batch x embedding_dim
         self.b = tf.placeholder(tf.float32, [None, None, self.EMBEDDING_DIM], name="sentence2") # batch x lb x embedding_dim
+        self.drop_a = tf.nn.dropout(self.a, self.keep_prob)
+        self.drop_b = tf.nn.dropout(self.b, self.keep_prob)
         self.labels = tf.placeholder(tf.float32, [None, 3], name="gold_label")
 
         # Attend
         # Calculate unnormalized attention weight e[i][j]
         self.unnormalized_attention_w = [[0] * self.token_count] * self.token_count # Dimension (la, lb)
 
-        self.f1a = tf.contrib.layers.fully_connected(self.a, self.PROJECTED_DIMENSION_F) # Dimension (batch_size, la, PROJECTED_DIMENSION_F)
-        self.f1b = tf.contrib.layers.fully_connected(self.b, self.PROJECTED_DIMENSION_F) # Dimension (batch_Size, lb, PROJECTED_DIMENSION_F)
+        self.f1a = tf.contrib.layers.fully_connected(self.drop_a, self.PROJECTED_DIMENSION_F) # Dimension (batch_size, la, PROJECTED_DIMENSION_F)
+        self.f1b = tf.contrib.layers.fully_connected(self.drop_b, self.PROJECTED_DIMENSION_F) # Dimension (batch_Size, lb, PROJECTED_DIMENSION_F)
 
         print("self.f1a[:, i, :] shape is ", self.f1a[:, 0, :])
         print("self.f1b[:, j, :] shape is ", self.f1a[:, 0, :])
@@ -96,26 +97,41 @@ class DecomposableAttentionNLI():
                 tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.h_logits, labels=self.labels),
                 name="loss"
             )
+            #tf.summary.scalar('TrainingLoss', self.loss)
             self.optimizer = tf.train.AdagradOptimizer(self.learning_rate)
             self.train_op = self.optimizer.minimize(self.loss)
 
         with tf.variable_scope("eval", reuse=tf.AUTO_REUSE) as scope:
             correct_prediction = tf.equal(tf.argmax(self.labels, 1), self.predicted_gold_labels)
             self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float64), name="accuracy")
+            #tf.summary.scalar('TrainingAccuracy', self.accuracy)
+
+        #Tensorboard Summary
+        #self.merged = tf.summary.merge_all()
+        #self.train_writer = tf.summary.FileWriter('summary/train', self.sess.graph)
   
     def train(self, train_file_path, epoch_number):
+        saver = tf.train.Saver(max_to_keep=500)
         batches = list(self.dp.get_batched_data(input_file_path=train_file_path, batch_size=self.batch_size))
+        batch_acc_list = []
+        batch_loss_list = []
         for i in range(epoch_number):
             batch_num = 0
             for batch_data in batches:
                 batch_num += 1
-                if batch_num % 10 == 0:
-                    print("batch", str(batch_num))
+                
                 batch_feed_dict = {
                     self.a: batch_data["sentence1"],
                     self.b: batch_data["sentence2"],
                     self.labels: batch_data["gold_label"],
                 }
+           
+                if batch_num % 100 == 0:
+                    print("batch", str(batch_num))
+                
+                _, acc, loss = self.sess.run([self.train_op, self.accuracy, self.loss], feed_dict=batch_feed_dict)
+                batch_acc_list.append(acc)
+                batch_loss_list.append(loss)
                 # print("a1")
                 # Expecting (batch_size, 20, 200)
                 # print(batch_data["sentence1"].shape)
@@ -159,16 +175,14 @@ class DecomposableAttentionNLI():
                 # print("self.h_output")
                 # print(len(self.sess.run(self.h_output, feed_dict=batch_feed_dict)))
                 # print(len(self.sess.run(self.h_output, feed_dict=batch_feed_dict)[0]))
-                self.sess.run(self.train_op, feed_dict=batch_feed_dict)
-                # print("real labels")
-                # print(batch_data["gold_label"])
-                # print("predicted labels")
-                # print(self.sess.run(self.predicted_gold_labels , feed_dict=batch_feed_dict))
-            print("finishing epoch ", str(i))
-            print("test accuracy")
-            self.eval(TEST_FILE_PATH)
+          
+            print("finishing epoch " + str(i) + ", test accuracy, loss")
+            print(str(sum(batch_acc_list)/len(batch_acc_list)) + "," + str(sum(batch_loss_list)/len(batch_loss_list)))
 
-    def eval(self, test_file_path):
+            #save_path = saver.save(self.sess, './models/', global_step=i)
+            #print("Model saved in file: %s" % save_path)
+
+    def eval(self, test_file_path, epoch_num):
         accuracies = []
         for test_data in self.dp.get_batched_data(input_file_path=test_file_path, batch_size=self.batch_size):
             test_feed = {
@@ -176,8 +190,11 @@ class DecomposableAttentionNLI():
                 self.b: test_data["sentence2"],
                 self.labels: test_data["gold_label"],
             }
-            accuracies.append(self.sess.run(self.accuracy, feed_dict=test_feed))
+            accuracy = self.sess.run(self.accuracy, feed_dict=test_feed)
+            #summary, accuracy = self.sess.run([self.merged, self.accuracy], feed_dict=test_feed)
+            #self.train_writer.add_summary(summary, epoch_num)
+            accuracies.append(accuracy)
         print(sum(accuracies)/len(accuracies))
 
     def predict(self, feeds):
-        return self.sess.run(self.predicted_gold_labels , feed_dict=feeds)
+        return self.sess.run(self.predicted_gold_labels, feed_dict=feeds)

@@ -30,24 +30,22 @@ class DataProcessorTest(unittest.TestCase):
     #     path = "models/glove.twitter.27B.200d.txt"
     #     self.dp.loadGloveModel(path)
 
-    # def test_gloVe_embeddings(self):
-    #     sentence = "My mom has a cat meoww".lower()
-    #     embeddings = self.dp.gloVe_embeddings(sentence, 8)
-    #     print(embeddings)
-    #     print(len(embeddings))
-    #     print(embeddings.shape)
+    def test_gloVe_embeddings(self):
+        sentence = " ".join(['\0 ', 'a'])
+        embeddings = self.dp.gloVe_embeddings(sentence, 3)
+        print("embedding for null token is ", embeddings)
 
-    def test_get_batched_data(self):
-        batch_num = 0
-        for batch_data in self.dp.get_batched_data(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", batch_size=1000):
-            batch_num += 1
-            print("batch_num is ", batch_num) 
-            print(batch_data["sentence1"].shape)
-            print(batch_data["sentence2"].shape)
-            print(batch_data["batch_max_word_count"])
-            print(batch_data["gold_label"].shape)
+    # def test_get_batched_data(self):
+    #     batch_num = 0
+    #     for batch_data in self.dp.get_batched_data(input_file_path="data/snli_1.0/snli_1.0_test.jsonl", batch_size=1000):
+    #         batch_num += 1
+    #         print("batch_num is ", batch_num) 
+    #         print(batch_data["sentence1"].shape)
+    #         print(batch_data["sentence2"].shape)
+    #         print(batch_data["batch_max_word_count"])
+    #         print(batch_data["gold_label"].shape)
 
-        print("batch num is ", batch_num)
+    #     print("batch num is ", batch_num)
 
 if __name__ == '__main__':
     unittest.main()
