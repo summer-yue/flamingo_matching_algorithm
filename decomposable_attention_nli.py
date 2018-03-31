@@ -8,34 +8,34 @@ class DecomposableAttentionNLI():
     """
     def __init__(self, learning_rate, batch_size):
         self.dp = DataProcessor()
-        self.keep_prob = 0.8
-        self.PROJECTED_DIMENSION_F = 150
-        self.PROJECTED_DIMENSION_G = 100
-        self.PROJECTED_DIMENSION_H = 3 # Number of gold labels
-        self.EMBEDDING_DIM = 200
-        self.learning_rate = learning_rate
-        self.token_count = 20
-        self.sess = tf.get_default_session()
+        self.keep_prob = 0.8 # Indicating dropout constant = 0.2
+        self.PROJECTED_DIMENSION_F = 150 # Number of neurons for the first fully connected layer
+        self.PROJECTED_DIMENSION_G = 100 # Number of neurons for the second fully connected layer
+        self.PROJECTED_DIMENSION_H = 3 # Number of gold labels = # Number of neurons for the third fully connected layer
+        self.EMBEDDING_DIM = 200 # Dimension of used in Glove embeddings
+        self.learning_rate = learning_rate # Learning rate used for the adagrad optimizer
+        self.token_count = 20 # Number of tokens in each sentence, with padding
         self.batch_size = batch_size
+
+        # Build and initialize tf graph
+        self.sess = tf.get_default_session()
         self.build_graph(batch_size=batch_size)
         self.sess.run(tf.global_variables_initializer())
 
     def build_graph(self, batch_size):
-        self.a = tf.placeholder(tf.float32, [None, None, self.EMBEDDING_DIM], name="sentence1") # token_count x batch x embedding_dim
-        self.b = tf.placeholder(tf.float32, [None, None, self.EMBEDDING_DIM], name="sentence2") # batch x lb x embedding_dim
+        """ Build the architecture used in natural language inference with attention
+        """
+        self.a = tf.placeholder(tf.float32, [None, None, self.EMBEDDING_DIM], name="sentence1") # batch_size x token_count x embedding_dim
+        self.b = tf.placeholder(tf.float32, [None, None, self.EMBEDDING_DIM], name="sentence2") # batch_size x token_count x embedding_dim
         self.drop_a = tf.nn.dropout(self.a, self.keep_prob)
         self.drop_b = tf.nn.dropout(self.b, self.keep_prob)
-        self.labels = tf.placeholder(tf.float32, [None, 3], name="gold_label")
+        self.labels = tf.placeholder(tf.float32, [None, 3], name="gold_label") # 3 final potential categories
 
         # Attend
         # Calculate unnormalized attention weight e[i][j]
         self.unnormalized_attention_w = [[0] * self.token_count] * self.token_count # Dimension (la, lb)
-
         self.f1a = tf.contrib.layers.fully_connected(self.drop_a, self.PROJECTED_DIMENSION_F) # Dimension (batch_size, la, PROJECTED_DIMENSION_F)
         self.f1b = tf.contrib.layers.fully_connected(self.drop_b, self.PROJECTED_DIMENSION_F) # Dimension (batch_Size, lb, PROJECTED_DIMENSION_F)
-
-        print("self.f1a[:, i, :] shape is ", self.f1a[:, 0, :])
-        print("self.f1b[:, j, :] shape is ", self.f1a[:, 0, :])
         for i in range(self.token_count):
             for j in range(self.token_count):
                 self.unnormalized_attention_w[i][j] = tf.reduce_sum(tf.multiply(self.f1a[:, i, :], self.f1b[:, j, :]))
@@ -43,8 +43,6 @@ class DecomposableAttentionNLI():
         # Calculate self.Alpha and self.Beta
         self.Beta = [[[0.0] * self.EMBEDDING_DIM] * batch_size] * self.token_count
         self.Alpha = [[[0.0] * self.EMBEDDING_DIM] * batch_size] * self.token_count
-        print("self.b[:][j][:])")
-        print(self.b[:][0][:])
         for i in range(self.token_count):
             for j in range(self.token_count):
                 sum_exp_e_ik = 0.0
@@ -81,15 +79,9 @@ class DecomposableAttentionNLI():
         # Aggregate
         self.v1_aggregate = tf.reduce_sum(self.v1, axis=0, name="self.v1_aggregate")
         self.v2_aggregate = tf.reduce_sum(self.v2, axis=0, name="self.v2_aggregate")
-        print(self.v1_aggregate )
-        print(self.v2_aggregate )
-        # Used for the aggregate step
         self.concat_vs = tf.concat([self.v1_aggregate, self.v2_aggregate], 1, name="concat_vs")
-        print(self.concat_vs) # (?, 200)
         self.h_logits = tf.contrib.layers.fully_connected(self.concat_vs, self.PROJECTED_DIMENSION_H, activation_fn=None)
-        print(self.h_logits ) # (?, 3)
         self.h_output = tf.nn.softmax(self.h_logits, name="h_output")
-
         self.predicted_gold_labels = tf.argmax(self.h_output, axis=1, name="predicted_gold_labels")        
 
         with tf.variable_scope("train", reuse=tf.AUTO_REUSE) as scope:
@@ -97,20 +89,21 @@ class DecomposableAttentionNLI():
                 tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.h_logits, labels=self.labels),
                 name="loss"
             )
-            #tf.summary.scalar('TrainingLoss', self.loss)
             self.optimizer = tf.train.AdagradOptimizer(self.learning_rate)
             self.train_op = self.optimizer.minimize(self.loss)
 
         with tf.variable_scope("eval", reuse=tf.AUTO_REUSE) as scope:
             correct_prediction = tf.equal(tf.argmax(self.labels, 1), self.predicted_gold_labels)
             self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float64), name="accuracy")
-            #tf.summary.scalar('TrainingAccuracy', self.accuracy)
 
-        #Tensorboard Summary
-        #self.merged = tf.summary.merge_all()
-        #self.train_writer = tf.summary.FileWriter('summary/train', self.sess.graph)
-  
     def train(self, train_file_path, epoch_number):
+        """ Train the attention NLI model 
+        Args:
+            train_file_path: jsonl file path to training data
+            epoch_number: number of epochs of training
+        Notes:
+            trained models are saved in models/ every 50 epochs
+        """
         saver = tf.train.Saver(max_to_keep=500)
         batches = list(self.dp.get_batched_data(input_file_path=train_file_path, batch_size=self.batch_size))
         batch_acc_list = []
@@ -119,7 +112,6 @@ class DecomposableAttentionNLI():
             batch_num = 0
             for batch_data in batches:
                 batch_num += 1
-                
                 batch_feed_dict = {
                     self.a: batch_data["sentence1"],
                     self.b: batch_data["sentence2"],
@@ -133,9 +125,9 @@ class DecomposableAttentionNLI():
                 batch_acc_list.append(acc)
                 batch_loss_list.append(loss)
                 # print("a1")
-                # Expecting (batch_size, 20, 200)
+                # # Expecting (batch_size, 20, 200)
                 # print(batch_data["sentence1"].shape)
-                # Expecting (batch_size, 200)
+                # # Expecting (batch_size, 200)
                 # print(batch_data["sentence1"][:, 0, :].shape)
 
                 # print("f1a") # (batch_size, 20, 150)
@@ -176,13 +168,20 @@ class DecomposableAttentionNLI():
                 # print(len(self.sess.run(self.h_output, feed_dict=batch_feed_dict)))
                 # print(len(self.sess.run(self.h_output, feed_dict=batch_feed_dict)[0]))
           
-            print("finishing epoch " + str(i) + ", test accuracy, loss")
+            print("finishing epoch " + str(i) + ", training accuracy, loss")
             print(str(sum(batch_acc_list)/len(batch_acc_list)) + "," + str(sum(batch_loss_list)/len(batch_loss_list)))
 
-            #save_path = saver.save(self.sess, './models/', global_step=i)
-            #print("Model saved in file: %s" % save_path)
+            # if i % 50 == 0:
+            #     save_path = saver.save(self.sess, './models/', global_step=i)
+            #     print("Model saved in file: %s" % save_path)
 
-    def eval(self, test_file_path, epoch_num):
+    def eval(self, test_file_path):
+        """ Evaluate model's performance on test data
+        Args:
+            test_file_path: path to the jsonl file containing test data
+        Returns:
+            float number indicating test accuracy
+        """
         accuracies = []
         for test_data in self.dp.get_batched_data(input_file_path=test_file_path, batch_size=self.batch_size):
             test_feed = {
@@ -191,10 +190,10 @@ class DecomposableAttentionNLI():
                 self.labels: test_data["gold_label"],
             }
             accuracy = self.sess.run(self.accuracy, feed_dict=test_feed)
-            #summary, accuracy = self.sess.run([self.merged, self.accuracy], feed_dict=test_feed)
-            #self.train_writer.add_summary(summary, epoch_num)
             accuracies.append(accuracy)
-        print(sum(accuracies)/len(accuracies))
+        test_acc = sum(accuracies)/len(accuracies)
+        print(test_acc)
+        return test_acc
 
     def predict(self, feeds):
         return self.sess.run(self.predicted_gold_labels, feed_dict=feeds)

@@ -20,7 +20,8 @@ class DecomposableAttentionNLITest(unittest.TestCase):
 
     def test_train(self):
         with self.sess.as_default():
-            self.nli.train(TEST_FILE_PATH, epoch_number=10000)
+            self.nli.train(TRAIN_FILE_PATH, epoch_number=1000)
+            self.nli.eval(TEST_FILE_PATH)
 
 if __name__ == '__main__':
     unittest.main()
