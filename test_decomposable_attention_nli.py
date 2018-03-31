@@ -3,6 +3,7 @@ import unittest
 import tensorflow as tf
 
 from decomposable_attention_nli import DecomposableAttentionNLI as DaNli
+TRAIN_FILE_PATH = "data/snli_1.0/snli_1.0_train.jsonl"
 TEST_FILE_PATH = "data/snli_1.0/snli_1.0_test.jsonl"
 
 class DecomposableAttentionNLITest(unittest.TestCase):
@@ -16,7 +17,7 @@ class DecomposableAttentionNLITest(unittest.TestCase):
 
     def test_train(self):
         with self.sess.as_default():
-            self.nli.train(TEST_FILE_PATH)
+            self.nli.train(TEST_FILE_PATH, epoch_number=100)
 
 if __name__ == '__main__':
     unittest.main()

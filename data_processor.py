@@ -15,6 +15,28 @@ class DataProcessor():
         self.HUNDRED_RAND_EMBEDDINGS = np.array([np.random.normal(0, 0.01, self.EMBEDDING_DIM)
             for i in range(100)])
 
+    def get_data(self, input_file_path):
+        """ Preprocess the data in a train/valid/test file into dictionary
+        Informations include:
+            sentence1: an np array of batch_size x la (maximum) x
+        Args:
+            input_file_path: path to file where the input jsonl is
+        Returns:
+            embedded_data: a dictionary of dictionaries containing embeddings of 2 sentences and 
+            their corresponding gold label in a vector form
+        """
+        postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=20)
+        batch_max_word_count = 20
+        embedded_data = {
+                            "sentence1": np.array([self.gloVe_embeddings(entry["sentence1"],
+                                batch_max_word_count) for entry in postprocessed_data]),
+                            "sentence2": np.array([self.gloVe_embeddings(entry["sentence2"],
+                                batch_max_word_count) for entry in postprocessed_data]),
+                            "batch_max_word_count": batch_max_word_count,
+                            "gold_label": np.array([entry["gold_label"] for entry in postprocessed_data])
+                        }
+        return embedded_data
+
     def get_batched_data(self, input_file_path, batch_size):
         """ Preprocess the data in a train/valid/test file into dictionaries that represent each batch
         Informations include:
@@ -25,18 +47,10 @@ class DataProcessor():
             embedded_data: a dictionary of dictionaries containing embeddings of 2 sentences and 
             their corresponding gold label in a vector form
         """
-        postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=30)
+        postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=20)
 
         for batch_dict in self.chunks(postprocessed_data, batch_size):
-
-            batch_max_word_count1 = max([len(entry["sentence1"].split()) for entry in batch_dict])
-            batch_max_word_count2 = max([len(entry["sentence2"].split()) for entry in batch_dict])
-            batch_max_word_count = max(batch_max_word_count1, batch_max_word_count2)
-            if batch_max_word_count < 15:
-                batch_max_word_count = 15
-            else:
-                batch_max_word_count = 30
-
+            batch_max_word_count = 20
             embedded_data = {
                                 "sentence1": np.array([self.gloVe_embeddings(entry["sentence1"],
                                     batch_max_word_count) for entry in batch_dict]),
@@ -46,9 +60,7 @@ class DataProcessor():
                                 "gold_label": np.array([entry["gold_label"] for entry in batch_dict])
                             }
 
-            # Testing on shorter sentences
-            if embedded_data["batch_max_word_count"] == 15:
-                yield embedded_data
+            yield embedded_data
 
     def preprocess_jsonl(self, input_file_path, max_token_num):
         """ handles reading data from input jsonl file and writing preprocessed data into a separate file
@@ -58,18 +70,14 @@ class DataProcessor():
         1. Extracting setences and gold label from jsonl file, removing instances with label "-" for
            gold label from the dataset
         2. Prepending each sentence with the NULL token
-        3. Adding padding to the sentences to the maximum length
-        4. Semi-sorting the data by token length < 15 and others (to ensure each batch has
-           similar length)
+        3. Adding padding to the sentences to the maximum length to 20 words
         Args:
             input_file_path: path to file where the input jsonl is
             max_token_num: the number of tokens of the sentences we are adding padding to
         Returns:
             np array of new dictionayrs  {"sentence1":..., "sentence2":..., "gold_label": 1} semi sorted
         """
-        short_data_list = []
-        long_data_list = []
-
+        data_list = []
         with open(input_file_path, 'rb') as input_file: # opening file in binary(rb) mode    
             for item in json_lines.reader(input_file):
                 if item["gold_label"] != "-": # Removing unlabeled data
@@ -77,18 +85,13 @@ class DataProcessor():
                     # Prepending sentences with the NULL token
                     token_array1 = ('\0 ' + item["sentence1"]).split()
                     token_array2 = ('\0 ' + item["sentence2"]).split()
-                    # Number of token count post processed
-                    data_len = max(len(token_array1), len(token_array2))
 
                     new_item["sentence1"] = self.pad_sentence(token_array1, max_token_num) 
                     new_item["sentence2"] = self.pad_sentence(token_array2, max_token_num)                    
                     new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to vector representation
-
-                    if data_len < 15:
-                        short_data_list.append(new_item)
-                    else:
-                        long_data_list.append(new_item)
-            return np.concatenate((short_data_list, long_data_list), axis=0)
+                    data_list.append(new_item)
+    
+            return np.array(data_list)
 
     def loadGloveModel(self, glove_file_path):
         return {}
@@ -143,6 +146,7 @@ class DataProcessor():
         if len(token_array) >= max_token_num:
             return ' '.join(token_array[0: max_token_num])
 
+        token_array += ["\0 "] * (max_token_num-len(token_array))
         return ' '.join(token_array)
 
     def chunks(self, l, n):
