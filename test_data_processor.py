@@ -31,8 +31,8 @@ class DataProcessorTest(unittest.TestCase):
     #     self.dp.loadGloveModel(path)
 
     def test_gloVe_embeddings(self):
-        sentence = " ".join(['\0 ', 'a'])
-        embeddings = self.dp.gloVe_embeddings(sentence, 3)
+        sentence = "An apple is good"
+        embeddings = self.dp.gloVe_embeddings(sentence, 10)
         print("embedding for null token is ", embeddings)
 
     # def test_get_batched_data(self):

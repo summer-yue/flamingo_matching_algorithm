@@ -9,7 +9,7 @@ class DecomposableAttentionNLI():
     def __init__(self, learning_rate, batch_size):
         self.dp = DataProcessor()
         self.keep_prob = 0.8 # Indicating dropout constant = 0.2
-        self.PROJECTED_DIMENSION_F = 150 # Number of neurons for the first fully connected layer
+        self.PROJECTED_DIMENSION_F = 300 # Number of neurons for the first fully connected layer
         self.PROJECTED_DIMENSION_G = 100 # Number of neurons for the second fully connected layer
         self.PROJECTED_DIMENSION_H = 3 # Number of gold labels = # Number of neurons for the third fully connected layer
         self.EMBEDDING_DIM = 200 # Dimension of used in Glove embeddings
@@ -33,9 +33,11 @@ class DecomposableAttentionNLI():
 
         # Attend
         # Calculate unnormalized attention weight e[i][j]
-        self.unnormalized_attention_w = [[0] * self.token_count] * self.token_count # Dimension (la, lb)
-        self.f1a = tf.contrib.layers.fully_connected(self.drop_a, self.PROJECTED_DIMENSION_F) # Dimension (batch_size, la, PROJECTED_DIMENSION_F)
-        self.f1b = tf.contrib.layers.fully_connected(self.drop_b, self.PROJECTED_DIMENSION_F) # Dimension (batch_Size, lb, PROJECTED_DIMENSION_F)
+        self.unnormalized_attention_w = [[0] * self.token_count] * self.token_count # Dimension (token_count, token_count)
+        self.f1a = tf.contrib.layers.fully_connected(self.drop_a, self.PROJECTED_DIMENSION_F) # Dimension (batch_size, token_count, PROJECTED_DIMENSION_F)
+        self.f1a = tf.contrib.layers.fully_connected(self.f1a, self.PROJECTED_DIMENSION_F)
+        self.f1b = tf.contrib.layers.fully_connected(self.drop_b, self.PROJECTED_DIMENSION_F) # Dimension (batch_Size, token_count, PROJECTED_DIMENSION_F)
+        self.f1b = tf.contrib.layers.fully_connected(self.f1b, self.PROJECTED_DIMENSION_F)
         for i in range(self.token_count):
             for j in range(self.token_count):
                 self.unnormalized_attention_w[i][j] = tf.reduce_sum(tf.multiply(self.f1a[:, i, :], self.f1b[:, j, :]))
@@ -69,10 +71,18 @@ class DecomposableAttentionNLI():
                 tf.concat([self.a[:, i, :], self.Beta[i]], axis=1), 
                 self.PROJECTED_DIMENSION_G
             )
+            self.v1[i] = tf.contrib.layers.fully_connected(
+                self.v1[i],
+                self.PROJECTED_DIMENSION_G
+            )
 
         for j in range(self.token_count):
             self.v2[j] = tf.contrib.layers.fully_connected(
                 tf.concat([self.b[:, j, :], self.Alpha[j]], axis=1),
+                self.PROJECTED_DIMENSION_G
+            )
+            self.v2[j] = tf.contrib.layers.fully_connected(
+                self.v2[j],
                 self.PROJECTED_DIMENSION_G
             )
 
@@ -105,83 +115,44 @@ class DecomposableAttentionNLI():
             trained models are saved in models/ every 50 epochs
         """
         saver = tf.train.Saver(max_to_keep=500)
-        batches = list(self.dp.get_batched_data(input_file_path=train_file_path, batch_size=self.batch_size))
         batch_acc_list = []
         batch_loss_list = []
         for i in range(epoch_number):
             batch_num = 0
-            for batch_data in batches:
+            for batch_data in self.dp.get_batched_data(input_file_path=train_file_path, batch_size=self.batch_size):
                 batch_num += 1
                 batch_feed_dict = {
                     self.a: batch_data["sentence1"],
                     self.b: batch_data["sentence2"],
                     self.labels: batch_data["gold_label"],
                 }
-           
+               
                 if batch_num % 100 == 0:
                     print("batch", str(batch_num))
                 
                 _, acc, loss = self.sess.run([self.train_op, self.accuracy, self.loss], feed_dict=batch_feed_dict)
                 batch_acc_list.append(acc)
                 batch_loss_list.append(loss)
-                # print("a1")
-                # # Expecting (batch_size, 20, 200)
-                # print(batch_data["sentence1"].shape)
-                # # Expecting (batch_size, 200)
-                # print(batch_data["sentence1"][:, 0, :].shape)
-
-                # print("f1a") # (batch_size, 20, 150)
-                # print(len(self.sess.run(self.f1a, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.f1a, feed_dict=batch_feed_dict)[0]))
-                # print(len(self.sess.run(self.f1a, feed_dict=batch_feed_dict)[0][0]))
-                # print("f1b") # (batch_size, 20, 150)
-                # print(len(self.sess.run(self.f1b, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.f1b, feed_dict=batch_feed_dict)[0]))
-                # print(len(self.sess.run(self.f1b, feed_dict=batch_feed_dict)[0][0]))
-                # print("w") # (20, 20)
-                # self.sess.run(self.unnormalized_attention_w[0][0], feed_dict=batch_feed_dict)
-                # print("self.Beta") #(20, batch_size, 200)
-                # print(self.sess.run(self.Beta[0], feed_dict=batch_feed_dict))
-                # print("self.Alpha") #(20, batch_size, 200)
-                # print(self.sess.run(self.Alpha[0], feed_dict=batch_feed_dict))
-
-                # print("self.v1") # (20, batch_size, 100)
-                # print(len(self.sess.run(self.v1, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.v1, feed_dict=batch_feed_dict)[0]))
-                # print(len(self.sess.run(self.v1, feed_dict=batch_feed_dict)[0][0]))
-                # print("self.v2")
-                # print(len(self.sess.run(self.v2[0], feed_dict=batch_feed_dict)))
-
-                # print("self.v1_aggregate ") # (batch_size, 100)
-                # print(len(self.sess.run(self.v1_aggregate, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.v1_aggregate, feed_dict=batch_feed_dict)[0]))
-                # print("self.v2_aggregate ")  # (batch_size, 100)
-                # print(len(self.sess.run(self.v2_aggregate, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.v2_aggregate, feed_dict=batch_feed_dict)[0]))
-                # print("self.concat_vs") # (batch_size, 200)
-                # print(len(self.sess.run(self.concat_vs, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.concat_vs, feed_dict=batch_feed_dict)[0]))
-                # print("self.h_logits")
-                # print(len(self.sess.run(self.h_logits, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.h_logits, feed_dict=batch_feed_dict)[0]))
-                # print("self.h_output")
-                # print(len(self.sess.run(self.h_output, feed_dict=batch_feed_dict)))
-                # print(len(self.sess.run(self.h_output, feed_dict=batch_feed_dict)[0]))
           
             print("finishing epoch " + str(i) + ", training accuracy, loss")
             print(str(sum(batch_acc_list)/len(batch_acc_list)) + "," + str(sum(batch_loss_list)/len(batch_loss_list)))
 
-            # if i % 50 == 0:
-            #     save_path = saver.save(self.sess, './models/', global_step=i)
-            #     print("Model saved in file: %s" % save_path)
+            if i % 100 == 0 and i > 0:
+                save_path = saver.save(self.sess, './models/', global_step=i)
+                print("Model saved in file: %s" % save_path)
 
-    def eval(self, test_file_path):
+    def eval(self, test_file_path, model_path):
         """ Evaluate model's performance on test data
         Args:
-            test_file_path: path to the jsonl file containing test data
+            test_file_path: path to the jsonl file containing test datamodel_path
+            model_path: path to the model to be restored
         Returns:
             float number indicating test accuracy
         """
+        saver = tf.train.Saver(max_to_keep=500)
+        saver.restore(self.sess, model_path)
+        print("Model restored from " + str(model_path))
+
         accuracies = []
         for test_data in self.dp.get_batched_data(input_file_path=test_file_path, batch_size=self.batch_size):
             test_feed = {
@@ -189,11 +160,25 @@ class DecomposableAttentionNLI():
                 self.b: test_data["sentence2"],
                 self.labels: test_data["gold_label"],
             }
-            accuracy = self.sess.run(self.accuracy, feed_dict=test_feed)
+            accuracy, predictions = self.sess.run([self.accuracy, self.predicted_gold_labels], feed_dict=test_feed)
+            print("predictions for the batch")
+            print(predictions)
+            print("Actual gold labels")
+            print(test_data["gold_label"])
             accuracies.append(accuracy)
         test_acc = sum(accuracies)/len(accuracies)
         print(test_acc)
+
         return test_acc
 
-    def predict(self, feeds):
+    def predict(self, embeddings1_list, embeddings2_list, model_path):
+        """Args:
+            embeddings1_list: np array of sentence1's embeddings
+            embeddings2_list: np array of sentence2's embeddings 
+            model_path: path to the model to be restored
+        """
+        feeds = {
+            self.a: embeddings1_list,
+            self.b: embeddings2_list,
+        }
         return self.sess.run(self.predicted_gold_labels, feed_dict=feeds)

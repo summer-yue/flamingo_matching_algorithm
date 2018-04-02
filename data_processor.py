@@ -1,5 +1,6 @@
 import numpy as np
 import json_lines
+import random
 
 class DataProcessor():
     """ The DataProcessor class handles reading data from file and 
@@ -90,11 +91,11 @@ class DataProcessor():
                     new_item["sentence2"] = self.pad_sentence(token_array2, max_token_num)                    
                     new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to vector representation
                     data_list.append(new_item)
-    
+            
+            random.shuffle(data_list)
             return np.array(data_list)
 
     def loadGloveModel(self, glove_file_path):
-        return {}
         print("Loading Glove Model")
         model = {}
         with open(glove_file_path, 'r') as f:
@@ -118,7 +119,7 @@ class DataProcessor():
         Returns:
             an np array of size #max_word_count x 200
         """
-        words = sentence.split()
+        words = sentence.lower().split()
         num_words = len(words)
 
         assert num_words <= max_word_count
