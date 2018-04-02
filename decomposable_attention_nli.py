@@ -174,12 +174,19 @@ class DecomposableAttentionNLI():
 
         return test_acc
 
-    def predict(self, embeddings1_list, embeddings2_list, model_path):
+    def predict(self, sentence1, sentence2, model_path):
+        embeddings1 = self.dp.gloVe_embeddings(sentence1, self.token_count)
+        embeddings2 = self.dp.gloVe_embeddings(sentence2, self.token_count)
+        return self.predict_by_embeddings(np.array([embeddings1]), np.array([embeddings2]), model_path)
+
+    def predict_by_embeddings(self, embeddings1_list, embeddings2_list, model_path):
         """Args:
             embeddings1_list: np array of sentence1's embeddings
             embeddings2_list: np array of sentence2's embeddings 
             model_path: path to the model to be restored
         """
+        saver = tf.train.Saver(max_to_keep=500)
+        saver.restore(self.sess, model_path)
         feeds = {
             self.a: embeddings1_list,
             self.b: embeddings2_list,

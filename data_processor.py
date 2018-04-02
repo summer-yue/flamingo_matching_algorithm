@@ -87,10 +87,11 @@ class DataProcessor():
                     token_array1 = ('\0 ' + item["sentence1"]).split()
                     token_array2 = ('\0 ' + item["sentence2"]).split()
 
-                    new_item["sentence1"] = self.pad_sentence(token_array1, max_token_num) 
-                    new_item["sentence2"] = self.pad_sentence(token_array2, max_token_num)                    
-                    new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to vector representation
-                    data_list.append(new_item)
+                    if len(token_array1) <= 20 and len(token_array2) <= 20:
+                        new_item["sentence1"] = self.pad_sentence(token_array1, max_token_num) 
+                        new_item["sentence2"] = self.pad_sentence(token_array2, max_token_num)                    
+                        new_item["gold_label"] = self.GOLD_LABELS[item["gold_label"]] # Converting gold label to vector representation
+                        data_list.append(new_item)
             
             random.shuffle(data_list)
             return np.array(data_list)
