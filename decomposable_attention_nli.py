@@ -175,9 +175,24 @@ class DecomposableAttentionNLI():
         return test_acc
 
     def predict(self, sentence1, sentence2, model_path):
-        embeddings1 = self.dp.gloVe_embeddings(sentence1, self.token_count)
-        embeddings2 = self.dp.gloVe_embeddings(sentence2, self.token_count)
-        return self.predict_by_embeddings(np.array([embeddings1]), np.array([embeddings2]), model_path)
+        embeddings1_list = ["\0"] * self.batch_size
+        embeddings2_list = ["\0"] * self.batch_size
+        embeddings1_list[0] = self.dp.gloVe_embeddings(sentence1, self.token_count)
+        embeddings2_list[0] = self.dp.gloVe_embeddings(sentence2, self.token_count)
+        for i in range(self.batch_size):
+            if i == 0:
+                embeddings1_list[0] = self.dp.gloVe_embeddings(sentence1, self.token_count)
+                embeddings2_list[0] = self.dp.gloVe_embeddings(sentence2, self.token_count)
+            else:
+                embeddings1_list[i] = self.dp.gloVe_embeddings("\0", self.token_count)
+                embeddings2_list[i] = self.dp.gloVe_embeddings("\0", self.token_count)
+        returned_label = self.predict_by_embeddings(np.array(embeddings1_list), np.array(embeddings2_list), model_path)
+        if returned_label == 0:
+            return "entailment"
+        elif returned_label == 1:
+            return "neutral"
+        else:
+            return "contradiction"
 
     def predict_by_embeddings(self, embeddings1_list, embeddings2_list, model_path):
         """Args:
