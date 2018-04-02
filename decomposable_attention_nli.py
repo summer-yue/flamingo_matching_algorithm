@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from data_processor import DataProcessor
 
@@ -117,6 +118,8 @@ class DecomposableAttentionNLI():
         saver = tf.train.Saver(max_to_keep=500)
         batch_acc_list = []
         batch_loss_list = []
+
+        self.accuracy_records_by_epoch = []
         for i in range(epoch_number):
             batch_num = 0
             for batch_data in self.dp.get_batched_data(input_file_path=train_file_path, batch_size=self.batch_size):
@@ -133,7 +136,7 @@ class DecomposableAttentionNLI():
                 _, acc, loss = self.sess.run([self.train_op, self.accuracy, self.loss], feed_dict=batch_feed_dict)
                 batch_acc_list.append(acc)
                 batch_loss_list.append(loss)
-          
+            self.accuracy_records_by_epoch.append(sum(batch_acc_list)/len(batch_acc_list))
             print("finishing epoch " + str(i) + ", training accuracy, loss")
             print(str(sum(batch_acc_list)/len(batch_acc_list)) + "," + str(sum(batch_loss_list)/len(batch_loss_list)))
 
@@ -182,3 +185,15 @@ class DecomposableAttentionNLI():
             self.b: embeddings2_list,
         }
         return self.sess.run(self.predicted_gold_labels, feed_dict=feeds)
+
+    def print_training_accuracy_graph(self):
+        """ Draw a line graph on training accuracy by epoch number
+        Data taken from self.accuracy_records_by_epoch recorded throughout the training process.
+        """
+        epoch_nums = [i+1 for i in range(len(self.accuracy_records_by_epoch))]
+        plt.plot(epoch_nums, self.accuracy_records_by_epoch)
+        plt.title('Training Accuracy on NLI task')
+        plt.legend(['Training Accuracy'], loc='upper right')
+        plt.xlabel('Epoch Number')
+        plt.ylabel('Accuracy')
+        plt.show()
