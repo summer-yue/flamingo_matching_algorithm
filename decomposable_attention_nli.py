@@ -130,8 +130,8 @@ class DecomposableAttentionNLI():
                     self.labels: batch_data["gold_label"],
                 }
                
-                if batch_num % 100 == 0:
-                    print("batch", str(batch_num))
+                if batch_num % 500 == 0:
+                    print("on batch", str(batch_num))
                 
                 _, acc, loss = self.sess.run([self.train_op, self.accuracy, self.loss], feed_dict=batch_feed_dict)
                 batch_acc_list.append(acc)
@@ -140,7 +140,7 @@ class DecomposableAttentionNLI():
             print("finishing epoch " + str(i) + ", training accuracy, loss")
             print(str(sum(batch_acc_list)/len(batch_acc_list)) + "," + str(sum(batch_loss_list)/len(batch_loss_list)))
 
-            if i % 100 == 0 and i > 0:
+            if i % 2 == 0 and i > 0:
                 save_path = saver.save(self.sess, './models/', global_step=i)
                 print("Model saved in file: %s" % save_path)
 
@@ -187,9 +187,10 @@ class DecomposableAttentionNLI():
                 embeddings1_list[i] = self.dp.gloVe_embeddings("\0", self.token_count)
                 embeddings2_list[i] = self.dp.gloVe_embeddings("\0", self.token_count)
         returned_label = self.predict_by_embeddings(np.array(embeddings1_list), np.array(embeddings2_list), model_path)
-        if returned_label == 0:
+
+        if returned_label[0] == 0:
             return "entailment"
-        elif returned_label == 1:
+        elif returned_label[0] == 1:
             return "neutral"
         else:
             return "contradiction"
@@ -216,6 +217,49 @@ class DecomposableAttentionNLI():
         plt.plot(epoch_nums, self.accuracy_records_by_epoch)
         plt.title('Training Accuracy on NLI task')
         plt.legend(['Training Accuracy'], loc='upper right')
+        plt.xlabel('Epoch Number')
+        plt.ylabel('Accuracy')
+        plt.show()
+
+    def print_testing_accuracy_graph(self, epoch_number, test_file_path):
+        """ Draw a line graph on testing accuracy by epoch number
+        Args:
+            epcoh_number: the largest number of epoch in the models
+            test_file_path: tile that contains the test data
+        """
+        saver = tf.train.Saver(max_to_keep=500)
+        
+        test_accuracy_records_by_epoch = []
+        batch_acc_list = []
+        batch_loss_list = []
+
+        for i in range(epoch_number):
+            if i % 2 == 0 and i > 0:
+                saver.restore(self.sess, "./models/-" + str(i))
+                batch_num = 0
+                for batch_data in self.dp.get_batched_data(input_file_path=test_file_path, batch_size=self.batch_size):
+                    batch_num += 1
+                    batch_feed_dict = {
+                        self.a: batch_data["sentence1"],
+                        self.b: batch_data["sentence2"],
+                        self.labels: batch_data["gold_label"],
+                    }
+                   
+                    if batch_num % 100 == 0:
+                        print("batch", str(batch_num))
+                    
+                    _, acc, loss = self.sess.run([self.train_op, self.accuracy, self.loss], feed_dict=batch_feed_dict)
+                    batch_acc_list.append(acc)
+                    batch_loss_list.append(loss)
+                test_accuracy_records_by_epoch.append(sum(batch_acc_list)/len(batch_acc_list))
+                print("For model with epoch " + str(i) + ", testing accuracy, loss")
+                print(str(sum(batch_acc_list)/len(batch_acc_list)) + "," + str(sum(batch_loss_list)/len(batch_loss_list)))
+
+        epoch_nums = [i+1 for i in range(len(accuracy_records_by_epoch))]
+
+        plt.plot(epoch_nums, test_accuracy_records_by_epoch)
+        plt.title('Test Accuracy on NLI task')
+        plt.legend(['Test Accuracy'], loc='upper Left')
         plt.xlabel('Epoch Number')
         plt.ylabel('Accuracy')
         plt.show()
