@@ -13,13 +13,13 @@ class DecomposableAttentionNLITest(unittest.TestCase):
     def setUp(self):
         self.sess = tf.Session()
         with self.sess.as_default():
-            self.nli = DaNli(learning_rate=0.05, batch_size=32)
+            self.nli = DaNli(learning_rate=0.01)
 
-    # def test_train(self):
-    #     with self.sess.as_default():
-    #         self.nli.train(TRAIN_FILE_PATH, epoch_number=20)
-    #         self.nli.print_training_accuracy_graph()
-    #         self.nli.eval(TEST_FILE_PATH, "./models/-20")
+    def test_train(self):
+        with self.sess.as_default():
+            self.nli.train(TRAIN_FILE_PATH, epoch_number=100)
+            self.nli.print_training_accuracy_graph()
+            self.nli.eval(TEST_FILE_PATH, "./models/-99")
 
     # def test_test_accuracy(self):
     #     with self.sess.as_default():
@@ -30,17 +30,17 @@ class DecomposableAttentionNLITest(unittest.TestCase):
     #         print(self.nli.predict("An apple is good.", "The church is good.", "./models/-100"))
     #         print(self.nli.predict("An apple is good.", "The apple is yummy.", "./models/-100"))
 
-    def test_predict(self):
-        sentence1and2s = [("looking for a front end engineer who knows Java", "looking for a software engineer"),
-            ("someone to watch Netflix with me", "someone to watch TV shows"),
-            ("a person to walk my dog", "someone nice to walk dogs"),
-            ("a Penn student to chat for coffee", "chat and get to know a penn student"),
-            ("a designer to cofound my startup", "a software designer interested in entrepreneurship")]
+    # def test_predict(self):
+    #     sentence1and2s = [("looking for a front end engineer who knows Java", "looking for a software engineer"),
+    #         ("someone to watch Netflix with me", "someone to watch TV shows"),
+    #         ("a person to walk my dog", "someone nice to walk dogs"),
+    #         ("a Penn student to chat for coffee", "chat and get to know a penn student"),
+    #         ("a designer to cofound my startup", "a software designer interested in entrepreneurship")]
 
-        #expected_outcome: all entailments
-        with self.sess.as_default():
-            for (s1, s2) in sentence1and2s:
-                print(self.nli.predict(s1, s2, "./models/-20"))
+    #     #expected_outcome: all entailments
+    #     with self.sess.as_default():
+    #         for (s1, s2) in sentence1and2s:
+    #             print(self.nli.predict(s1, s2, "./models/-10"))
 
 if __name__ == '__main__':
     unittest.main()

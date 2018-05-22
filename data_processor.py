@@ -7,41 +7,22 @@ class DataProcessor():
         writing preprocessed data into a separate file
         embed data into vectors
     """
-    def __init__(self):
+    def __init__(self, input_file_path):
         # Used for hashing gold labels into vector format for training, omitting "-"
-        self.GOLD_LABELS = {'entailment': [1, 0, 0], 'neutral': [0, 1, 0], 'contradiction': [0, 0, 1]}
+        self.GOLD_LABELS = {
+            'entailment': np.array([1, 0, 0]),
+            'neutral': np.array([0, 1, 0]),
+            'contradiction': np.array([0, 0, 1])
+        }
         self.GLOVE_MODEL_PATH = "models/glove.twitter.27B.200d.txt"
         self.EMBEDDING_DIM = 200
         self.glove_model = self.loadGloveModel(self.GLOVE_MODEL_PATH)
         self.HUNDRED_RAND_EMBEDDINGS = np.array([np.random.normal(0, 0.01, self.EMBEDDING_DIM)
             for i in range(100)])
-
-    def get_data(self, input_file_path):
-        """ Preprocess the data in a train/valid/test file into dictionary
-        Informations include:
-            sentence1: an np array of batch_size x la (maximum) x
-        Args:
-            input_file_path: path to file where the input jsonl is
-        Returns:
-            embedded_data: a dictionary of dictionaries containing embeddings of 2 sentences and 
-            their corresponding gold label in a vector form
-        """
-        postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=20)
-        batch_max_word_count = 20
-        embedded_data = {
-                            "sentence1": np.array([self.gloVe_embeddings(entry["sentence1"],
-                                batch_max_word_count) for entry in postprocessed_data]),
-                            "sentence2": np.array([self.gloVe_embeddings(entry["sentence2"],
-                                batch_max_word_count) for entry in postprocessed_data]),
-                            "batch_max_word_count": batch_max_word_count,
-                            "gold_label": np.array([entry["gold_label"] for entry in postprocessed_data])
-                        }
-        return embedded_data
+        self.postprocessed_data = self.preprocess_jsonl(input_file_path, max_token_num=20)
 
     def get_batched_data(self, input_file_path, batch_size):
         """ Preprocess the data in a train/valid/test file into dictionaries that represent each batch
-        Informations include:
-            sentence1: an np array of batch_size x la (maximum) x
         Args:
             input_file_path: path to file where the input jsonl is
         Returns:
@@ -63,6 +44,22 @@ class DataProcessor():
 
             yield embedded_data
 
+    def get_single_data(self):
+        """ Preprocess the data in a train/valid/test file into dictionaries that represent one data
+        Args:
+            input_file_path: path to file where the input jsonl is
+        Returns:
+            embedded_data: a dictionary containing embeddings of 2 sentences and 
+            their corresponding gold label in a vector form
+        """
+        for entry in self.postprocessed_data:
+            embedded_data = {
+                "sentence1": self.gloVe_embeddings(entry["sentence1"], max_word_count=20),
+                "sentence2": self.gloVe_embeddings(entry["sentence2"], max_word_count=20),
+                "gold_label": entry["gold_label"]
+            }
+            yield embedded_data
+
     def preprocess_jsonl(self, input_file_path, max_token_num):
         """ handles reading data from input jsonl file and writing preprocessed data into a separate file
         Preprocessed data is in the json format: np array of {"sentence1":..., "sentence2":...,
@@ -76,7 +73,7 @@ class DataProcessor():
             input_file_path: path to file where the input jsonl is
             max_token_num: the number of tokens of the sentences we are adding padding to
         Returns:
-            np array of new dictionayrs  {"sentence1":..., "sentence2":..., "gold_label": 1} semi sorted
+            np array of new dictionaries  {"sentence1":..., "sentence2":..., "gold_label": [1, 0, 0]} semi sorted
         """
         data_list = []
         with open(input_file_path, 'rb') as input_file: # opening file in binary(rb) mode    
@@ -107,7 +104,7 @@ class DataProcessor():
                 model[word] = embedding
             print("Done.",len(model)," words loaded!")
             return model
-
+    
     def gloVe_embeddings(self, sentence, max_word_count):
         """ Use 200 dimensional GloVe embeddings (Pennington et al., 2014) to represent words
         Normalize each vector to l2 norm of 1
